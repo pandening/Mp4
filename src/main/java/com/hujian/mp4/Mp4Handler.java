@@ -65,6 +65,11 @@ public class Mp4Handler implements Serializable {
      * the small video range
      */
     private List<VideoTimeRange> videoTimeRanges = null;
+    
+    /**
+     * how many small movie were splited out actually
+     */
+    private Intege realSplitCount = null ;
 
     /**
      * the constructor
@@ -143,6 +148,8 @@ public class Mp4Handler implements Serializable {
         if( count != this.cutCount ){
             System.out.println("real cut time:"+count+" set:"+this.cutCount);
         }
+        
+        this.realSplitCount = count;
 
         System.out.println("initialize done.");
     }
@@ -362,6 +369,10 @@ public class Mp4Handler implements Serializable {
 
     public String getVideoFile() {
         return videoFile;
+    }
+    
+    public Intege getRealSplitCount(){
+      return this.realSplitCount;   
     }
 
     public void setVideoFile(String videoFile) {
