@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.bytedeco.javacpp.opencv_highgui.*;
 
@@ -65,24 +67,30 @@ public class Mp4Handler implements Serializable {
      * the small video range
      */
     private List<VideoTimeRange> videoTimeRanges = null;
-    
-    /**
-     * how many small movie were splited out actually
-     */
-    private Intege realSplitCount = null ;
 
     /**
-     * the constructor
-     * @param videoFile the source video path
-     * @param cutCount  the small video count
+     * how many small videos
      */
-    public Mp4Handler(String videoFile,int cutCount){
+    private Integer realSplitCount = null;
+
+    /**
+     * if you want to use thread pool
+     */
+    private ExecutorService threadPool = null;
+
+    /**
+     * the constructor with thread pool
+     * @param videoFile the source video file
+     * @param cutCount  the split count
+     * @param threadCount the thread size
+     */
+    public Mp4Handler(String videoFile,int cutCount,int threadCount){
         this.videoFile = videoFile;
         this.cutCount = cutCount;
         //get the fps of this video
         opencv_highgui.CvCapture cvCapture = cvCreateFileCapture(videoFile);
         if (cvCapture !=null) {
-           this.videoFPS = cvGetCaptureProperty(cvCapture, CV_CAP_PROP_FPS);
+            this.videoFPS = cvGetCaptureProperty(cvCapture, CV_CAP_PROP_FPS);
         }else{
             System.out.println("get the video's fps failed");
         }
@@ -148,10 +156,25 @@ public class Mp4Handler implements Serializable {
         if( count != this.cutCount ){
             System.out.println("real cut time:"+count+" set:"+this.cutCount);
         }
-        
-        this.realSplitCount = count;
+
+        this.realSplitCount = (int)count;
+
+        //init thread pool
+        if( threadCount != 0 ){
+            threadCount = Math.min( threadCount,cutCount );
+            this.threadPool = Executors.newFixedThreadPool(threadCount);
+        }
 
         System.out.println("initialize done.");
+    }
+
+    /**
+     * the constructor with no thread pool
+     * @param videoFile the source video path
+     * @param cutCount  the small video count
+     */
+    public Mp4Handler(String videoFile,int cutCount){
+        this(videoFile,cutCount,0);
     }
 
     /**
@@ -159,19 +182,46 @@ public class Mp4Handler implements Serializable {
      * @throws IOException
      */
     public void split() throws IOException {
-
-        if( this.videoTimeRanges == null || this.videoTimeRanges.size() == 0 ){
-            System.out.println("the job is empty");
-            return;
+        //no thread pool
+        if( this.threadPool == null ){
+            if( this.videoTimeRanges == null || this.videoTimeRanges.size() == 0 ){
+                System.out.println("the job is empty");
+                return;
+            }
+            String dstFile = null;
+            for( VideoTimeRange timeRange: this.videoTimeRanges ){
+                dstFile = this.outputVideoBase + timeRange.getStart()+ ".mp4";
+                System.out.println("generating the video:"+dstFile);
+                this.SplitVideo(new File(dstFile),(int)(timeRange.getStart() * 1000),(int)(timeRange.getEnd() * 1000));
+                System.out.println(timeRange.toString());
+            }
+        }else{//with thread pool
+            if( this.videoTimeRanges == null || this.videoTimeRanges.size() == 0 ){
+                System.out.println("the job is empty");
+                return;
+            }
+            String dstFile = null;
+            for( final VideoTimeRange timeRange: this.videoTimeRanges ){
+                dstFile = this.outputVideoBase + timeRange.getStart()+ ".mp4";
+                System.out.println("generating the video:"+dstFile);
+                final String finalDstFile = dstFile;
+                this.threadPool.execute(new Runnable() {
+                    public void run() {
+                        try {
+                            SplitVideo(new File(finalDstFile),(int)(timeRange.getStart() * 1000),(int)(timeRange.getEnd() * 1000));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
         }
-        String dstFile = null;
-        for( VideoTimeRange timeRange: this.videoTimeRanges ){
-            dstFile = this.outputVideoBase + timeRange.getStart()+ ".mp4";
-            System.out.println("generating the video:"+dstFile);
-            this.SplitVideo(new File(dstFile),(int)(timeRange.getStart() * 1000),(int)(timeRange.getEnd() * 1000));
-            System.out.println(timeRange.toString());
+        if( this.threadPool != null ){
+            if( ! threadPool.isShutdown() ){
+                System.out.println("shut down the thread pool");
+                this.threadPool.shutdown();
+            }
         }
-
         System.out.println("split video done.");
     }
 
@@ -370,10 +420,6 @@ public class Mp4Handler implements Serializable {
     public String getVideoFile() {
         return videoFile;
     }
-    
-    public Intege getRealSplitCount(){
-      return this.realSplitCount;   
-    }
 
     public void setVideoFile(String videoFile) {
         this.videoFile = videoFile;
@@ -433,5 +479,13 @@ public class Mp4Handler implements Serializable {
 
     public void setPerVideoSeconds(Integer perVideoSeconds) {
         this.perVideoSeconds = perVideoSeconds;
+    }
+
+    public Integer getRealSplitCount() {
+        return realSplitCount;
+    }
+
+    public ExecutorService getThreadPool() {
+        return threadPool;
     }
 }
