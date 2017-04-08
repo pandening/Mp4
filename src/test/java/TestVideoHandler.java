@@ -11,7 +11,7 @@ public class TestVideoHandler {
 
         String srcFile =  "C:\\Users\\hujian\\Downloads\\Mp4\\test.mp4";
 
-        Mp4Handler mp4Handler = new Mp4Handler(srcFile,4);
+        Mp4Handler mp4Handler = new Mp4Handler(srcFile,5,5);
 
         mp4Handler.split();
 
